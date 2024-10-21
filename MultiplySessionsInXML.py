@@ -1,67 +1,63 @@
 import xml.etree.ElementTree as ET
 
-# Define the path to the XML file
-file_path = r'C:\Test\Test.xml'
-
-# Number of copies to add
-num_copies = 4
-
-# Namespace dictionary
-namespaces = {
-    'mtccore': 'http://system.mp-objects.com/schemas/MTC/MTCCore/V1/MTCCore.xsd'
-}
-
-def increment_product_id(product_id_text, increment):
-    """Increment the PRODUCT_ID value."""
-    base, current_number = product_id_text.rsplit('-', 1)
-    new_number = str(int(current_number) + increment)
-    return f"{base}-{new_number}"
-
-def add_copies_to_xml(file_path, num_copies):
+def make_copies_of_invoice_lines(file_path, num_copies):
     # Parse the XML file
     tree = ET.parse(file_path)
     root = tree.getroot()
 
-    # Find the CUSTOMER_ORDER_LINE section to copy
-    #customer_order_line = root.find('.//mtccore:CUSTOMER_ORDER_LINE', namespaces)
-    customer_order_line = root.find('mtccore:CUSTOMER_ORDER_LINE', namespaces)
-    print (customer_order_line)
-    if customer_order_line is None:
-        print('No CUSTOMER_ORDER_LINE section found.')
+    # Find the body/INVOICE element
+    invoice_element = root.find(".//body/INVOICE")
+
+    if invoice_element is None:
+        print("INVOICE element not found in the XML file.")
         return
 
-    # Get the PRODUCT_ID text from the existing CUSTOMER_ORDER_LINE
-    product_id_elem = customer_order_line.find('.//mtccore:PRODUCT_ID', namespaces)
-    if product_id_elem is None:
-        print('No PRODUCT_ID found.')
+    # Find all INVOICE_LINE elements
+    invoice_lines = invoice_element.findall("INVOICE_LINE")
+
+    if not invoice_lines:
+        print("No INVOICE_LINE elements found in the XML file.")
         return
 
-    base_product_id = product_id_elem.text
-
-    # Find the parent element (assumed to be CUSTOMER_ORDER) to append the new lines
-    customer_order = root.find('mtccore:CUSTOMER_ORDER_LINE', namespaces)
-    if customer_order is None:
-        print('No CUSTOMER_ORDER section found.')
-        return
-
-    # Create new CUSTOMER_ORDER_LINE sections
+    # Make copies of each INVOICE_LINE element
     for i in range(1, num_copies + 1):
-        # Create a new CUSTOMER_ORDER_LINE element
-        new_order_line = ET.Element('mtccore:CUSTOMER_ORDER_LINE', nsmap=namespaces)
-        for elem in customer_order_line:
-            new_elem = ET.SubElement(new_order_line, elem.tag, nsmap=namespaces)
-            new_elem.text = elem.text
+        for invoice_line in invoice_lines:
+            # Create a copy of the INVOICE_LINE element
+            invoice_line_copy = ET.fromstring(ET.tostring(invoice_line))
 
-        # Increment PRODUCT_ID
-        product_id_elem = new_order_line.find('.//mtccore:PRODUCT_ID', namespaces)
-        if product_id_elem is not None:
-            product_id_elem.text = increment_product_id(base_product_id, i)
+            # Find the INVOICE_IDENTIFIER element and update its VALUE
+            invoice_identifier = invoice_line_copy.find("INVOICE_IDENTIFIER")
+            if invoice_identifier is not None:
+                value_element = invoice_identifier.find("VALUE")
+                if value_element is not None:
+                    # Increment the VALUE text to ensure uniqueness
+                    value_element.text = f"{value_element.text}_copy{i}"
 
-        # Append the new CUSTOMER_ORDER_LINE to the CUSTOMER_ORDER
-        customer_order.append(new_order_line)
+            # Append the copy to the INVOICE element
+            invoice_element.append(invoice_line_copy)
 
-    # Write the modified XML back to the file
-    tree.write(file_path, encoding='utf-8', xml_declaration=True)
+    # Write the modified XML back to the file with proper formatting
+    tree.write(file_path, encoding="utf-8", xml_declaration=True)
 
-# Run the function
-add_copies_to_xml(file_path, num_copies)
+    # Reformat the XML file to ensure proper indentation and new lines
+    with open(file_path, 'r', encoding='utf-8') as file:
+        xml_content = file.read()
+
+    formatted_xml_content = format_xml(xml_content)
+
+    with open(file_path, 'w', encoding='utf-8') as file:
+        file.write(formatted_xml_content)
+
+    print(f"Added {num_copies} copies of each INVOICE_LINE to {file_path}")
+
+def format_xml(xml_string):
+    """Function to format XML string with proper indentation and new lines."""
+    from xml.dom.minidom import parseString
+    dom = parseString(xml_string)
+    return dom.toprettyxml()
+
+# Example usage
+file_path = r"C:\Test\INVOICE_UPS.xml"  # Replace with your XML file path
+num_copies = 2  # Number of copies you want to make
+
+make_copies_of_invoice_lines(file_path, num_copies)
